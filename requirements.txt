@@ -1,6 +1,7 @@
 langchain
 langgraph
 langchain-openai
+langchain-groq
 fastapi
 pydantic-settings
 uvicorn

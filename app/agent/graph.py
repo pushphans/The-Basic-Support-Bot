@@ -1,9 +1,11 @@
+import asyncio
 from typing import Literal, Optional, TypedDict, Annotated
 from langchain.chat_models import init_chat_model
-from langchain.messages import AnyMessage, SystemMessage
-from langgraph.graph import START, StateGraph, add_messages
+from langchain.messages import AnyMessage, HumanMessage, SystemMessage
+from langgraph.graph import END, START, StateGraph, add_messages
 from pydantic import BaseModel, Field
 from app.core.config import settings
+from langgraph.checkpoint.memory import InMemorySaver
 
 # -----------------------
 # LLM INITIALIZATION
@@ -48,10 +50,17 @@ You are an intent classifier for a customer support chatbot. Your task is to ana
     return {"intent": response.Intent}
 
 
+async def routing_after_manager_function(
+    state: AgentState,
+) -> Literal["tech", "refund", "general"]:
+    intent = state["intent"]
 
-
-async def routing_after_manager_function(state: AgentState) -> Literal["tech", "refund", "general"]:
-    pass
+    if intent == "tech":
+        return "tech_node"
+    elif intent == "refund":
+        return "refund_node"
+    else:
+        return "general_node"
 
 
 async def tech_node(state: AgentState) -> AgentState:
@@ -104,4 +113,19 @@ graph.add_node("refund_node", refund_node)
 graph.add_node("general_node", general_node)
 
 graph.add_edge(START, "manager_node")
-graph.add_conditional_edges("manager_node", )
+graph.add_conditional_edges(
+    "manager_node",
+    routing_after_manager_function,
+    {
+        "tech_node": "tech_node",
+        "refund_node": "refund_node",
+        "general_node": "general_node",
+    },
+)
+
+graph.add_edge("tech_node", END)
+graph.add_edge("refund_node", END)
+graph.add_edge("general_node", END)
+
+
+workflow = graph.compile()
